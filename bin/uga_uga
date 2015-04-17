@@ -24,6 +24,8 @@ case "$action" in
 
   "watch")
     echo "=== Watching: "
+    bin/uga_uga test "$@" || true
+
     inotifywait -q --exclude .git/ -e close_write,close -m -r .  | while read CHANGE
     do
       dir=$(echo "$CHANGE" | cut -d' ' -f 1)
@@ -43,7 +45,12 @@ case "$action" in
         if [[ "$path" == *bin/uga_uga* ]]; then
           echo ""
           echo "=== Restarting:"
-          exec $path "watch"
+          exec $path "watch" "$@"
+        fi
+
+        if [[ "$file" == *.rb* || "$path" == *spec* ]]; then
+          echo "=== Running tests: $@"
+          bin/uga_uga test "$@" || true
         fi
       fi # === if file op
 
