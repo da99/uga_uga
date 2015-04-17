@@ -1,7 +1,8 @@
 
-# Uga_Uga
+# Uga\_Uga
 
-I have no idea.
+Don't use this.
+Use [Treetop](https://github.com/nathansobo/treetop) or [OMeta](https://github.com/alexwarth/ometa-js).
 
 ## Installation
 
