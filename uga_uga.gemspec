@@ -7,9 +7,14 @@ Gem::Specification.new do |spec|
   spec.version       = `cat VERSION`
   spec.authors       = ["da99"]
   spec.email         = ["i-hate-spam-1234567@mailinator.com"]
-  spec.summary       = %q{TODO: Write a short summary. Required.}
+  spec.summary       = %q{A little tool to help you write DSLs.}
   spec.description   = %q{
-    TODO: Write a longer description. Optional.
+    It takes in a String and gives you back a
+    stupid data structure of commands, blocks, and Strings.
+    You then do stuff to make that stuff come alive.
+    Whatever... I don't have time to tell you exactly
+    since you will use Treetop anyway:
+    https://github.com/nathansobo/treetop
   }
   spec.homepage      = "https://github.com/da99/uga_uga"
   spec.license       = "MIT"
