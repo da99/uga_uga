@@ -22,14 +22,19 @@ describe "Uga_Uga" do
     result.should.match /bobby/
   end # === it
 
-  it "accepts commands" do
-    result = []
-    Uga_Uga.uga "p { }" do |cmd, block|
-      result << cmd.to_sym
-    end
+  it "parses lines without blocks" do
+    code = <<-EOF
+      a :href => addr
+      a :href addr
+      p { }
+    EOF
 
-    result.should == [:p]
-  end # === it
+    Uga_Uga.clean(Uga_Uga.uga code).
+      should == [ "a :href => addr",
+                  "a :href addr",
+                  "p", []
+    ]
+  end
 
   it "parses inner blocks" do
     code = <<-EOF
@@ -50,7 +55,7 @@ describe "Uga_Uga" do
     ]
   end
 
-  it "runs the inner block" do
+  it "yields the inner block" do
     result = []
     code = <<-EOF
       p {
@@ -89,6 +94,21 @@ describe "Uga_Uga" do
       code
     end
     result.should == ["cmd, cmd", "inner, inner"]
+  end # === it
+
+  it "yields lines without a block" do
+    code = "
+      br /
+      br /
+      p { }
+    "
+    result = []
+    Uga_Uga.uga(code) do |cmd, code|
+      result << cmd
+      code
+    end
+
+    result.should == ['br /', 'br /', 'p']
   end # === it
 
 end # === describe "Uga_Uga"
