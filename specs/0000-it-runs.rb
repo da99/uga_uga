@@ -1,5 +1,5 @@
 
-describe "Uga_Uga" do
+describe :uga.inspect do
 
   it "runs" do
     o = Uga_Uga.uga(<<-EOF)
@@ -111,4 +111,27 @@ describe "Uga_Uga" do
     result.should == ['br /', 'br /', 'p']
   end # === it
 
-end # === describe "Uga_Uga"
+  it "passes block w/original whitespace" do
+    blok = "
+         a 
+          a a
+          a
+    "
+    code = "
+      p {#{blok}}
+   "
+   result = nil
+   Uga_Uga.uga(code) { |cmd, code| result = code.join }
+   result.should == blok
+  end # === it
+
+  it "does not parse mustaches as blocks: {{ }}" do
+    code = "
+      p {{ code }}
+   "
+   result = nil
+   Uga_Uga.uga(code) { |cmd, code| result = cmd }
+   result.should == code.strip
+  end # === it
+
+end # === describe :uga

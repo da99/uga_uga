@@ -17,9 +17,7 @@ class Uga_Uga
     end
 
     def tokenize origin
-      origin.split(/("[^"]+")/).map { |s|
-        s.split(/(\{|\n|\})/)
-      }.flatten
+      origin.split(/(\n)|((?<!\{)\{(?!\{))|((?<!\})\}(?!\}))/)
     end
 
     def blockenize raw
@@ -60,7 +58,7 @@ class Uga_Uga
         str
 
       when Array
-        arg.map { |unknown| clean unknown }.compact!
+        arg.map { |unknown| clean unknown }.compact
 
       else
         arg
