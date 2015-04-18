@@ -46,7 +46,11 @@ describe "Uga_Uga" do
     code = <<-EOF
       p {
         span {
-          "my text"
+          1 { 
+            2 { 
+              3 { "my text" }
+            }
+          }
         }
       }
     EOF
@@ -60,7 +64,7 @@ describe "Uga_Uga" do
       code
     end
 
-    result.should == [:p, :span, '"my text"']
+    result.should == [:p, :span, :'1', :'2', :'3', '"my text"']
   end # === it
 
 end # === describe "Uga_Uga"
