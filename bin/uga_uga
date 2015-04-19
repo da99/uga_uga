@@ -2,10 +2,14 @@
 # -*- bash -*-
 #
 #
-set -u -e -o pipefail
 
 action="$1"
 shift
+set -u -e -o pipefail
+
+if [[ -z "$action" ]]; then
+  action="watch"
+fi
 
 case "$action" in
 
@@ -35,7 +39,7 @@ case "$action" in
 
       if [[ ( ! "$op" =~ "NOWRITE" ) && ( "$op" =~ "CLOSE" || "$op" =~ "WRITE" )  && ! -z "$file" ]]
       then
-        echo ""
+
         if [[ "$file" == *.js* ]]; then
           echo ""
           echo "=== Runninig jshint on $path: $CHANGE"
@@ -48,10 +52,17 @@ case "$action" in
           exec $path "watch" "$@"
         fi
 
-        if [[ "$file" == *.rb* || "$path" == *spec* ]]; then
-          echo "=== Running tests: $@"
-          bin/uga_uga test "$@" || true
+        if [[ "$path" == */explore.rb* ]]; then
+          cmd="bundle exec ruby "$path""
+          echo "=== $cmd"
+          $cmd || true
+        else
+          if [[ "$file" == *.rb* || "$path" == *spec* ]]; then
+            echo "=== Running tests: $@"
+            bin/uga_uga test "$@" || true
+          fi
         fi
+
       fi # === if file op
 
     done
