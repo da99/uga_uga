@@ -16,16 +16,24 @@ class Uga_Uga
 
 
   attr_reader :stack
-  def initialize str, file_or_number = nil
+  def initialize str_or_arr, file_or_number = nil
+    if str_or_arr.is_a?(String)
+      str    = str_or_arr
+      @lines = str_or_arr.split(NEW_LINE_REGEXP)
+    else
+      str    = nil
+      @lines = str_or_arr
+    end
+
+    @old      = []
     @instruct = Proc.new
     @stack    = []
-    @origin   = str
-    @lines    = str.split(NEW_LINE_REGEXP)
+    @origin   = str_or_arr
     @line_num = if file_or_number.is_a? Numeric
                   file_or_number
                 else
                   contents = File.read(file_or_number || __FILE__ )
-                  index    = contents.index(str)
+                  index    = contents.index(str || @lines.join("\n"))
                   if index
                     contents[0,index + 1].split("\n").size
                   else
@@ -33,7 +41,6 @@ class Uga_Uga
                   end
                 end
 
-    @old = []
     run
   end # === def uga
 
@@ -52,15 +59,19 @@ class Uga_Uga
   end
 
   def first *args
-    l!.split(*args).first
+    l!.split.first.split(*args).first.strip
   end
 
   def split *args
     l!.split *args
   end
 
-  def save_as cmd
-    @stack.last[:command] = cmd
+  def save_as cmd, data = nil
+    @stack.last[:type] = cmd
+    if data
+      @stack.<<( @stack.pop.merge(data) )
+    end
+    @stack.last
   end
 
   def shift
@@ -68,75 +79,68 @@ class Uga_Uga
     @old.last
   end
 
-  def grab_until *args
+  def head? str_or_rxp
+    rxp = if str_or_rxp.is_a?(String)
+            e = Regexp.escape str_or_rxp
+            /\A\ *#{e}/
+          else
+            str_or_rxp
+          end
+    l![rxp]
+  end
+
+  def tail? str_or_rxp
+    rxp = if str_or_rxp.is_a?(String)
+            e = Regexp.escape str_or_rxp
+            /#{e}\ *\z/
+          else
+            str_or_rxp
+          end
+    l![rxp]
+  end
+
+  def grab_all
+    blok = []
+    while !@lines.empty?
+      blok << shift
+    end
+
+    @stack.<<(
+      :type  => :unknown,
+      :block => blok
+    )
+  end
+
+  def grab
+    @stack.<<(
+      :type  => :unknown,
+      :block => [shift]
+    )
+  end
+
+  def grab_until period
     new_cmd = nil
-    args.detect { |str|
-      bookends = str.split
-      size  = bookends.size
+    blok    = []
+    found   = false
+    at_end  = /\ +#{Regexp.escape period}\ *\z/
+    is_line = /\A\ *#{Regexp.escape period}\ *\z/
 
-      case size
+    if found = (l!)[at_end]
+      blok << shift
+      at_end = true
+    end
 
-      when 1
-        blok    = []
-        found   = false
-        period  = bookends.first
-        at_end  = /\ +#{Regexp.escape period}\ *\z/
-        is_line = /\A\ *#{Regexp.escape period}\ *\z/
+    while !found && (l = shift)
+      if !(found =l[is_line])
+        blok << l
+      end
+    end
 
-        if found = (l = shift)[at_end]
-          at_end = true
-          blok << l
-        end
-
-        while !found && (l = shift)
-          if !(found =l[is_line])
-            blok << l
-          end
-        end
-
-        new_cmd = {
-          :command    => period,
-          :block      => blok,
-          :block_type => period,
-          :one_line   => (at_end === true)
-        }
-
-      when 2
-        open, close = bookends.map { |str|  Regexp.escape str }
-
-        # eg: my command {{var}} { osmosdmf df}
-        if @lines.first[/\A(.+?)\ (?<!#{open})#{open}(?!#{open})(.+)(?<!#{close})#{close}(?!#{close})\ *\Z/]
-          shift
-          new_cmd = {
-            :command => $1,
-            :block   => $2,
-            :block_type => "#{open} #{close}"
-          }
-        else
-          blok = []
-          found = false
-          cmd   = shift
-          index = @lines.first.index(/[^\ ]/)
-          close = /\A#{' ' * index}#{bookends.last}\ *\Z/
-          while !found && l = shift
-            found = l[close]
-            if !found
-              blok << l
-            end
-          end
-          new_cmd = {
-            :command => cmd,
-            :block   => blok,
-            :block_type => bookends.join(' ')
-          }
-        end
-
-      else
-        fail ArgumentError, "Either one or two pieces allowed: #{str.inspect}"
-      end # === case size
-
-      new_cmd
-    } # === detect
+    new_cmd = {
+      :type    => period,
+      :block   => blok,
+      :etc     => [period]
+    }
 
     if !new_cmd
       fail "Not found: #{cmd.inspect} --> #{action.inspect}"
@@ -147,66 +151,34 @@ class Uga_Uga
 
   def run
     stack = []
+
     while !@lines.empty?
       catch :skip do
         instance_eval &@instruct
       end
       shift
     end
-    return @stack
 
-      case action
+    @stack.each { |h|
+      next if h[:done?] || h[:type] == :raw
 
-      when :ignore
-
-      when :insert
-        stack << l
-
-      when Hash
-        stack << action
-
-      when String, Regexp
-        blok  = []
-        found = false
-
-        if action.is_a? String
-          found = cmd[/\ #{Regexp.escape action}\ *\Z/]
-          if !found
-            index  = cmd.index /[^\ ]/
-            action = /\A#{' ' * index}#{Regexp.escape action}\ *\Z/
-          end
-        end
-
-        while !found && ( l = lines.shift )
-          if l =~ action
-            found = true
-          else
-            blok << l
-          end
-        end
-
-        new_cmd = {
-          :command => cmd,
-          :block   => blok
-        }
-
-      #when Array
-
-      else
-        fail ArgumentError, "Unknown action from #{is_command}: #{action.inspect}"
-      end # === case
-
-      if new_cmd && new_cmd[:block].is_a?(Array)
-        new_cmd[:block] = if do_eval
-                            block(new_cmd[:block], is_command)
-                          else
-                            new_cmd[:block]
-                          end
-        stack << new_cmd
+      if h[:type] == String
+        h[:output] = h[:block].join("\n")
+        h.delete :block
+        next
       end
 
-    stack
-  end # === def block
+      if h[:type] == Array
+        h[:output] = h[:block]
+        h.delete :block
+        next
+      end
+
+      next unless h[:type].is_a?(Symbol) || h[:type].is_a?(String)
+      ap h[:block]
+      h[:output] = Uga_Uga.new(h[:block], &@instruct).stack
+    }
+  end # === def run
 
 end # === class Uga_Uga
 
@@ -220,7 +192,7 @@ Text $!!!
     So is this.
 $!!!
 
-style {
+div {
   a, b.name! {
     color red
   }
@@ -235,6 +207,7 @@ p.name!
 /p
 
 a.red, div.red { color red }
+
 p
   id hello
   a galaxy://dd Visit my galaxy /a
@@ -262,26 +235,60 @@ puts "\n\n\n"
 uga = Uga_Uga.new(str) do
 
   skip if white?
-  tag = first().split('.').first
-  # l[/\A\ *(a|p|style|span|color|Text )/]
+
   case
-  when tag == 'style' || tag  == 'color' || first()[/(?!\{)\{(?<!\{)/]
-    grab_until '{ }'
-  when tag == 'Text' && split.size == 2
-    target = shift
-    grab_until(target.split.last)
-    save_as :text
+  when tail?('{')
+    selectors = shift
+    grab_until '}'
+    save_as :css, :selectors => selectors
+
+  when tail?('}') && l![/\A\ *(.+)\{\ *(.+)\ *\}\ *\Z/] # === div.col!, div.red { ... }
+    selectors = $1
+    content   = $2
+    grab
+    save_as :css, :selectors => selectors, :block=>[$2], :one_liner=>true
+
+  when head?('Text') && (pieces = split).size == 2
+    shift
+    grab_until(pieces.last)
+    save_as String
+
+  when head?('color')
+    line = l!
+    grab
+    save_as :css_property, :name=>:color, :value => line.sub('color', ''), :done? => true
+
   else
-    grab_until  "/#{tag}", '{ }'
-    save_as tag.to_sym
-  end
-end
+    tag = first('.')
+    if tail?("/#{tag}")
+      grab
+      save_as :html, :tag=>tag.to_sym, :one_liner=>true, :done? => true
+    else
+      tag = tag.to_sym
+      case tag
+      when :p
+        selector = shift
+        grab_until "/#{tag}"
+        save_as :html, :tag=>tag, :selector => selector
+      else
+        if stack.empty? || l![/\A\ *(\-{4,})\ *\Z/]
+          grab_all
+          save_as String
+        else
+          fail ArgumentError, "Unknown: #{l!.inspect}"
+        end
+      end
+    end
+
+  end # === case
+
+end # === do
 
 # puts "================================"
 # puts str
 # puts "================================"
 
-ap(uga.stack)
+ap(uga.stack, :indent=>-2)
 puts "=== DONE ======================="
 
 
