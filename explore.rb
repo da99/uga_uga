@@ -15,8 +15,28 @@ class Uga_Uga
   end
 
 
-  attr_reader :stack
-  def initialize str_or_arr, file_or_number = nil
+  attr_reader :stack, :line_num, :parent
+  def initialize str_or_arr, *args
+    @parent = nil
+    file_or_number = nil
+
+    args.each { |o|
+      case o
+      when Uga_Uga
+        @parent = o
+        file_or_number ||= o.line_num
+
+      when Numeric
+        file_or_number = o
+
+      when String
+        file_or_number = o
+
+      else
+        fail ArgumentError, "Unknown argument: #{o.inspect}"
+      end
+    }
+
     if str_or_arr.is_a?(String)
       str    = str_or_arr
       @lines = str_or_arr.split(NEW_LINE_REGEXP)
@@ -109,16 +129,15 @@ class Uga_Uga
     blok
   end
 
-  def grab_until period, line = nil
+  def grab_all_or_until period
+    grab_until period, :close_optional
+  end
+
+  def grab_until period, *opts
     new_cmd  = nil
     blok     = []
     found    = false
     line_num = @line_num
-
-    if line
-      index = line.index(/[^\ ]/) || 0
-      period = "#{" " * index}#{period}"
-    end
 
     is_line = period.is_a?(Regexp) ? period : /\A#{Regexp.escape period}\ *\Z/
 
@@ -128,8 +147,8 @@ class Uga_Uga
       end
     end
 
-    if !found
-      fail ArgumentError, "Missing from around line number: #{line_num}: #{period.inspect}"
+    if !found && !opts.include?(:close_optional)
+      fail ArgumentError, "Missing from around line number: #{line_num}: #{period.inspect}\n#{blok.join "\n"}"
     end
 
     blok
@@ -139,39 +158,38 @@ class Uga_Uga
     return @stack unless @stack.empty?
 
     while !@lines.empty?
+      size = @lines.size
+      num = line_num
       catch(:skip) do
         @stack << instance_eval(&@instruct)
+        @stack.last[:line_num] = num
       end
-      shift
+      shift if size == @lines.size
     end
 
-    return @stack
-
     @stack.each { |h|
-      next if h[:done?] || h[:type] == :raw
+      next if !h[:raw] || h[:done?]
 
       if h[:type] == String
-        h[:output] = h[:block].join("\n")
-        h.delete :block
+        h[:output] = h[:raw].join("\n")
+        h.delete :raw
         next
       end
 
       if h[:type] == Array
-        h[:output] = h[:block]
-        h.delete :block
+        h[:output] = h[:raw]
+        h.delete :raw
         next
       end
 
-      next unless h[:type].is_a?(Symbol) || h[:type].is_a?(String)
-      ap h[:block]
-      h[:output] = Uga_Uga.new(h[:block], &@instruct).stack
+      h[:output] = Uga_Uga.new(h.delete(:raw), h[:line_num], self, &@instruct).stack
     }
   end # === def run
 
 end # === class Uga_Uga
 
 using Uga_Uga::String_Refines
-str = "
+str = <<-EOF
 
 String $!!!
   This is a string.
@@ -200,22 +218,22 @@ p
   id hello
   a galaxy://dd Visit my galaxy /a
   a http://dd
-    visit my galaxy
+    visit my galaxy 1
   /a
   a
     http://ddd
-    visit my galaxy
+    visit my galaxy  2
   /a
   a pop!
     http://ddd
-    visit my galaxy
+    visit my galaxy 3
   /a
   ----------------------------
   I am a paragraph that goes +!
   on and                     +!
   on.
 /p
-"
+EOF
 
 puts "================================"
 puts "\n\n\n"
@@ -254,11 +272,18 @@ uga = Uga_Uga.new(str) do
       :output => grab_until(/\A\ *#{Regexp.escape close}\ *\Z/).join("\n")
     }
 
-  when l![/\A\ *color\ *([a-zA-Z0-9\-\_\#])\ *\Z/]
+  when l![/\A\ *color\ *([a-zA-Z0-9\-\_\#]+)\ *\Z/]
     val = $1
     final = {
       :type  => :css_property,
       :name  => :color,
+      :output=> val
+    }
+
+  when l![/\A\ *id\ *([a-zA-Z0-9\-\_\#]+)\ *\Z/]
+    val = $1
+    final = {
+      :type  => :id!,
       :output=> val
     }
 
@@ -269,13 +294,18 @@ uga = Uga_Uga.new(str) do
     else
       tag = tag.to_sym
       case tag
-      when :p
-        {:type=>:html, :tag=>tag, :selector => shift, :output=>grab_until("/#{tag}")}
+      when :p, :a
+        index = l!.index(/[^\ ]/)
+        {:type=>:html, :tag=>tag, :selector => shift, :raw=>grab_until("#{" " * index}/#{tag}")}
       else
-        if stack.empty? || l![/\A\ *(\-{4,})\ *\Z/]
-          {:type=>String, :output=>grab_all}
+        if stack.empty?
+          {:type=>String, :raw=>grab_all}
+        elsif l![/\A(\ *\-{4,})\ *\Z/]     # Start of multi-line string --------------------
+          eos = $1
+          shift
+          {:type=>String, :raw=>grab_all_or_until(/\A#{eos}\ *|Z/)}
         else
-          fail ArgumentError, "Unknown: #{l!.inspect}"
+          fail ArgumentError, "Unknown command: #{line_num}: #{l!.inspect}"
         end
       end
     end
