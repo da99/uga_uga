@@ -76,6 +76,7 @@ class Uga_Uga
 
   def shift
     @old << @lines.shift
+    @line_num = @line_num + 1
     @old.last
   end
 
@@ -105,30 +106,21 @@ class Uga_Uga
       blok << shift
     end
 
-    @stack.<<(
-      :type  => :unknown,
-      :block => blok
-    )
+    blok
   end
 
-  def grab
-    @stack.<<(
-      :type  => :unknown,
-      :block => [shift]
-    )
-  end
+  def grab_until period, line = nil
+    new_cmd  = nil
+    blok     = []
+    found    = false
+    line_num = @line_num
 
-  def grab_until period
-    new_cmd = nil
-    blok    = []
-    found   = false
-    at_end  = /\ +#{Regexp.escape period}\ *\z/
-    is_line = /\A\ *#{Regexp.escape period}\ *\z/
-
-    if found = (l!)[at_end]
-      blok << shift
-      at_end = true
+    if line
+      index = line.index(/[^\ ]/) || 0
+      period = "#{" " * index}#{period}"
     end
+
+    is_line = period.is_a?(Regexp) ? period : /\A#{Regexp.escape period}\ *\Z/
 
     while !found && (l = shift)
       if !(found =l[is_line])
@@ -136,28 +128,24 @@ class Uga_Uga
       end
     end
 
-    new_cmd = {
-      :type    => period,
-      :block   => blok,
-      :etc     => [period]
-    }
-
-    if !new_cmd
-      fail "Not found: #{cmd.inspect} --> #{action.inspect}"
+    if !found
+      fail ArgumentError, "Missing from around line number: #{line_num}: #{period.inspect}"
     end
 
-    @stack << new_cmd
+    blok
   end
 
   def run
-    stack = []
+    return @stack unless @stack.empty?
 
     while !@lines.empty?
-      catch :skip do
-        instance_eval &@instruct
+      catch(:skip) do
+        @stack << instance_eval(&@instruct)
       end
       shift
     end
+
+    return @stack
 
     @stack.each { |h|
       next if h[:done?] || h[:type] == :raw
@@ -185,7 +173,7 @@ end # === class Uga_Uga
 using Uga_Uga::String_Refines
 str = "
 
-Text $!!!
+String $!!!
   This is a string.
     So is this.
     So is this.
@@ -237,43 +225,55 @@ uga = Uga_Uga.new(str) do
   skip if white?
 
   case
-  when tail?('{')
-    selectors = shift
-    grab_until '}'
-    save_as :css, :selectors => selectors
+  when l![/\A(\ *)([^\{]+)\ *\{\ *\Z/]        # === multi-line css
+    indent = $1
+    close = 
+    shift
+    final = {
+      :type      => :css,
+      :selectors => $2,
+      :raw       => grab_until(/\A#{indent}\}\ *\Z/)
+    }
 
-  when tail?('}') && l![/\A\ *(.+)\{\ *(.+)\ *\}\ *\Z/] # === div.col!, div.red { ... }
+  when l![/\A\ *(.+)\{\ *(.+)\ *\}\ *\Z/]     # === css one-liner
     selectors = $1
     content   = $2
-    grab
-    save_as :css, :selectors => selectors, :block=>[$2], :one_liner=>true
-
-  when head?('Text') && (pieces = split).size == 2
     shift
-    grab_until(pieces.last)
-    save_as String
+    final = {
+      :type      => :css,
+      :selectors => selectors,
+      :raw       => [$2],
+      :one_liner => true
+    }
 
-  when head?('color')
-    line = l!
-    grab
-    save_as :css_property, :name=>:color, :value => line.sub('color', ''), :done? => true
+  when l![/\A\ *String\ *([^\ ]+)\ *\Z/]        # === Multi-line String
+    close = $1
+    shift
+    final = {
+      :type   => String,
+      :output => grab_until(/\A\ *#{Regexp.escape close}\ *\Z/).join("\n")
+    }
+
+  when l![/\A\ *color\ *([a-zA-Z0-9\-\_\#])\ *\Z/]
+    val = $1
+    final = {
+      :type  => :css_property,
+      :name  => :color,
+      :output=> val
+    }
 
   else
     tag = first('.')
     if tail?("/#{tag}")
-      grab
-      save_as :html, :tag=>tag.to_sym, :one_liner=>true, :done? => true
+      {:type=>:html, :tag=>tag.to_sym, :one_liner=>true, :output => shift}
     else
       tag = tag.to_sym
       case tag
       when :p
-        selector = shift
-        grab_until "/#{tag}"
-        save_as :html, :tag=>tag, :selector => selector
+        {:type=>:html, :tag=>tag, :selector => shift, :output=>grab_until("/#{tag}")}
       else
         if stack.empty? || l![/\A\ *(\-{4,})\ *\Z/]
-          grab_all
-          save_as String
+          {:type=>String, :output=>grab_all}
         else
           fail ArgumentError, "Unknown: #{l!.inspect}"
         end
