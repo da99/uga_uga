@@ -52,10 +52,11 @@ describe :uga.inspect do
       p { }
     EOF
 
-    Uga_Uga.clean(Uga_Uga.uga code).
-      should == [ "a :href => addr",
-                  "a :href addr",
-                  "p", []
+    clean(uga code).
+      should == [
+        :html, "a :href => addr /a",
+        :html, "a :href addr    /a",
+        :css, []
     ]
   end
 
@@ -68,41 +69,15 @@ describe :uga.inspect do
       }
     EOF
 
-    Uga_Uga.clean(Uga_Uga.uga code).
+    clean(uga code).
       should == [
-        "p", [
-          "span", [
-            "inner", ['"my"']
+        :css, [
+          :css, [
+            :css, ['"my"']
           ]
         ]
     ]
   end
-
-  it "yields the inner block" do
-    result = []
-    code = <<-EOF
-      p {
-        span {
-          1 {
-            2 {
-              3 { "my text" }
-            }
-          }
-        }
-      }
-    EOF
-
-    Uga_Uga.uga(code) do |cmd, code|
-      if cmd['"']
-        result << cmd
-      else
-        result << cmd.to_sym 
-      end
-      code
-    end
-
-    result.should == [:p, :span, :'1', :'2', :'3', '"my text"']
-  end # === it
 
   it "passes all text before a block start: cmd, cmd {" do
     result = []
@@ -112,49 +87,15 @@ describe :uga.inspect do
         }
       }
     ^
-    Uga_Uga.uga(code) do |cmd, code|
-      result << cmd
-      code
-    end
-    result.should == ["cmd, cmd", "inner, inner"]
-  end # === it
-
-  it "yields lines without a block" do
-    code = "
-      br /
-      br /
-      p { }
-    "
-    result = []
-    Uga_Uga.uga(code) do |cmd, code|
-      result << cmd
-      code
-    end
-
-    result.should == ['br /', 'br /', 'p']
-  end # === it
-
-  it "passes block w/original whitespace" do
-    blok = "
-         a 
-          a a
-          a
-    "
-    code = "
-      p {#{blok}}
-   "
-   result = nil
-   Uga_Uga.uga(code) { |cmd, code| result = code.join }
-   result.should == blok
+    uga(code).stack.first[:selectors]
+    .should == "cmd, cmd"
   end # === it
 
   it "does not parse mustaches as blocks: {{ }}" do
     code = "
-      p {{ code }}
+      p { {{code}} }
    "
-   result = nil
-   Uga_Uga.uga(code) { |cmd, code| result = cmd }
-   result.should == code.strip
+   clean(uga(code)).should == [:css, ['{{code}}']]
   end # === it
 
 end # === describe :uga

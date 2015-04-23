@@ -20,11 +20,16 @@ module Bacon
       end
     end
 
+    def uga *args
+      SAMPLE.run *args
+    end
+
   end # === class Context
+
 end # === module Bacon
 
 
-WWW_APP = Uga_Uga.new do
+SAMPLE = Uga_Uga.new do
 
   skip if white?
 
@@ -38,7 +43,7 @@ WWW_APP = Uga_Uga.new do
       :raw       => grab_until(/\A#{close}\}\ *\Z/)
     }
 
-  when rex?(" (...) { (...) } ")              # === css one-liner
+  when rex?(" (!{) {(...)} ")              # === css one-liner
     selectors , content = captures
     shift
     final = {

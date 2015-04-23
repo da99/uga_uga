@@ -38,7 +38,7 @@ Here is a video on creating your own external DSL:
       results << "#{captures.first} called with #{captures.last}"
 
     else
-      fail ArgumentError, "Command not found: #{name.inspect}"
+      fail ArgumentError, "Command not found: #{l!.inspect}"
 
     end # === case name
 

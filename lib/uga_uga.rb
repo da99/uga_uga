@@ -5,6 +5,8 @@ class Uga_Uga
   NOTHING         = ''.freeze
   REX             = /(\ {1,})|\(([^\)]+)\)|(.)/
   REX_CACHE       = {}
+  ZERO_OR_MORE_SPACES = /\ */
+  ONE_OR_MORE_SPACES  = /\ +/
 
   module String_Refines
     refine String do
@@ -44,10 +46,12 @@ class Uga_Uga
       base = str.scan(REX).map { |arr|
         case
         when arr[0]
-          /\ */
+          ONE_OR_MORE_SPACES
 
         when arr[1]
-          case arr[1].strip
+          key = arr[1].strip
+
+          case key
           when '...'
             /\ *([^\)]+?)\ */
 
@@ -68,17 +72,31 @@ class Uga_Uga
           when 'num'
             /\ *([0-9\.\_\-]+)\ */
 
+          when /\A![^\!]+/
+            /\ *([^#{Regexp.escape key.sub('!', '')}]+)\ */
+
           else
             fail ArgumentError, "Unknown value for Regexp: #{arr[1].inspect} in #{str.inspect}"
-          end
+          end # === case key
 
         when arr[2]
           Regexp.escape arr[2]
 
         else
           fail ArgumentError, "#{str.inspect} -> #{REG_EXP.inspect}"
-        end
+        end # === case
       }
+
+      if base.first == ONE_OR_MORE_SPACES
+        base.shift
+        base.unshift ZERO_OR_MORE_SPACES
+      end
+
+      if base.last == ONE_OR_MORE_SPACES
+        base.pop
+        base.push ZERO_OR_MORE_SPACES
+      end
+
       /\A#{base.join}\Z/
     end
 
@@ -242,7 +260,7 @@ class Uga_Uga
     blok
   end
 
-  def run *args
+  public def run *args
     return(Uga_Uga.new(*args, &@instruct)) unless args.empty?
     return @stack unless @stack.empty?
 
