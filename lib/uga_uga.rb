@@ -39,6 +39,49 @@ class Uga_Uga
       end
     end
 
+    def reg_exp str, *custom
+      i = -1
+      base = str.scan(REX).map { |arr|
+        case
+        when arr[0]
+          /\ */
+
+        when arr[1]
+          case arr[1].strip
+          when '...'
+            /\ *([^\)]+?)\ */
+
+          when '_'
+            i += 1
+            fail ArgumentError, "NO value set for #{i.inspect} -> #{str.inspect}" unless custom[i]
+            '(' + custom[i].to_s + ')'
+
+          when 'word'
+            /\ *([^\ \)]+)\ */
+
+          when 'white*'
+            /([\ ]*)/
+
+          when 'white'
+            /([\ ]+)/
+
+          when 'num'
+            /\ *([0-9\.\_\-]+)\ */
+
+          else
+            fail ArgumentError, "Unknown value for Regexp: #{arr[1].inspect} in #{str.inspect}"
+          end
+
+        when arr[2]
+          Regexp.escape arr[2]
+
+        else
+          fail ArgumentError, "#{str.inspect} -> #{REG_EXP.inspect}"
+        end
+      }
+      /\A#{base.join}\Z/
+    end
+
   end # === class self ===
 
   attr_reader :stack, :line_num, :parent, :captures
@@ -96,55 +139,12 @@ class Uga_Uga
 
   def rex? str, *args
     key     = [str,args].to_s
-    reg_exp = ( REX_CACHE[key] ||= reg_exp(str, *args) )
+    reg_exp = ( REX_CACHE[key] ||= Uga_Uga.reg_exp(str, *args) )
     match = l!.match reg_exp
     @captures = match ?
                   match.captures :
                   nil
     !!match
-  end
-
-  def reg_exp str, *custom
-    i = -1
-    base = str.scan(REX).map { |arr|
-      case
-      when arr[0]
-        /\ */
-
-      when arr[1]
-        case arr[1].strip
-        when '...'
-          /\ *([^\)]+)\ */
-
-        when '_'
-          i += 1
-          fail ArgumentError, "NO value set for #{i.inspect} -> #{str.inspect}" unless custom[i]
-          '(' + custom[i].to_s + ')'
-
-        when 'word'
-          /\ *([^\ \)]+)\ */
-
-        when 'white*'
-          /([\ ]*)/
-
-        when 'white'
-          /([\ ]+)/
-
-        when 'num'
-          /\ *([0-9\.\_\-]+)\ */
-
-        else
-          fail ArgumentError, "Unknown value for Regexp: #{arr[1].inspect} in #{str.inspect}"
-        end
-
-      when arr[2]
-        Regexp.escape arr[2]
-
-      else
-        fail ArgumentError, "#{str.inspect} -> #{REG_EXP.inspect}"
-      end
-    }
-    /\A#{base.join}\Z/
   end
 
   def l!
@@ -250,8 +250,11 @@ class Uga_Uga
       size = @lines.size
       num = line_num
       catch(:skip) do
-        @stack << instance_eval(&@instruct)
-        @stack.last[:line_num] = num
+        result = instance_eval(&@instruct)
+        if result.is_a?(Hash)
+          @stack << result
+          @stack.last[:line_num] = num
+        end
       end
       shift if size == @lines.size
     end

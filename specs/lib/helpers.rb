@@ -14,7 +14,7 @@ module Bacon
       return clean(o.stack) if o.respond_to?(:stack)
 
       o.inject([]) do |memo, hash|
-        memo << hash[:type]
+        memo << hash[:type] unless hash[:type] == String
         memo << clean(hash[:output])
         memo
       end

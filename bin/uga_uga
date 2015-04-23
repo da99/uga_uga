@@ -58,7 +58,7 @@ case "$action" in
           echo "=== $cmd"
           $cmd || true
         else
-          if [[ "$file" == *.rb* || "$path" == *spec* ]]; then
+          if [[ "$file" == *.rb* || "$file" == *.md* || "$path" == *spec* ]]; then
             echo "=== Running tests: $@"
             bin/uga_uga test "$@" || true
           fi

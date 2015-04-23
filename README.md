@@ -27,14 +27,14 @@ Here is a video on creating your own external DSL:
 
   Uga_Uga.new code do
 
-    case name
+    case
 
     when rex?("(white*)(word) { ")
       line = shift
       results << "#{captures.last} was called"
       {:raw=>grab_until(bracket(line, '}'))}
 
-    when " (word) { (...) } "
+    when rex?(" (word) { (...) } ")
       results << "#{captures.first} called with #{captures.last}"
 
     else
@@ -44,6 +44,6 @@ Here is a video on creating your own external DSL:
 
   end # === .new
 
-  puts results.inspect
+  results
 
 ```

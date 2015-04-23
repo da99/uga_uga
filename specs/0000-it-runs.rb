@@ -27,7 +27,7 @@ describe :uga.inspect do
     end
 
     clean(o).should == [
-      'p', [String, '"my paragraph"']
+      'p', ['"my paragraph"']
     ]
   end
 
@@ -37,7 +37,12 @@ describe :uga.inspect do
     code     = (contents[/```ruby([^`]+)```/] && $1).gsub('puts ','')
 
     result = eval(code, nil, file, contents.split("\n").index('```ruby') + 1)
-    result.should.match /bobby/
+
+    result.should == [
+      "bobby was called",
+      "howie called with :funny",
+      'mandel called with "comedian"'
+    ]
   end # === it
 
   it "parses lines without blocks" do
