@@ -1,15 +1,33 @@
 
+
 describe :uga.inspect do
 
   it "runs" do
-    o = Uga_Uga.uga(<<-EOF)
+    code = <<-EOF
       p {
         "my paragraph"
       }
     EOF
 
-    Uga_Uga.clean(o).should == [
-      'p', ['"my paragraph"']
+    o = Uga_Uga.new(code) do
+      case
+      when rex?(" (word) { ")
+        final = {
+          :type =>captures.first,
+          :raw  =>grab_until(bracket shift, '}')
+        }
+      when stack.empty?
+        final = {
+          :type=>String,
+          :output=>grab_all.join("\n")
+        }
+      else
+        fail ArgumentError, "Unknown common: #{l!}"
+      end
+    end
+
+    clean(o).should == [
+      'p', [String, '"my paragraph"']
     ]
   end
 
@@ -24,8 +42,8 @@ describe :uga.inspect do
 
   it "parses lines without blocks" do
     code = <<-EOF
-      a :href => addr
-      a :href addr
+      a :href => addr /a
+      a :href addr    /a
       p { }
     EOF
 

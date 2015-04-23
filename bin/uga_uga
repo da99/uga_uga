@@ -17,6 +17,7 @@ case "$action" in
     echo " ====================================================="
     echo ""
     echo " $  uga_uga   watch"
+    echo " $  uga_uga   watch  [test args]"
     echo ""
     echo " $  uga_uga   test"
     echo " $  uga_uga   test   name"

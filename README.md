@@ -25,29 +25,24 @@ Here is a video on creating your own external DSL:
 
   results = []
 
-  Uga_Uga.uga code do |name, blok|
+  Uga_Uga.new code do
 
     case name
 
-    when "bobby"
-      results << "bobby was called"
-      blok
+    when rex?("(white*)(word) { ")
+      line = shift
+      results << "#{captures.last} was called"
+      {:raw=>grab_until(bracket(line, '}'))}
 
-    when "howie"
-      results << "howie was called"
-      blok
-
-    when "mandel"
-      results << "mandel was called"
-      blok
-
-    when ":funny", '"comedian"'
+    when " (word) { (...) } "
+      results << "#{captures.first} called with #{captures.last}"
 
     else
       fail ArgumentError, "Command not found: #{name.inspect}"
-    end
 
-  end
+    end # === case name
+
+  end # === .new
 
   puts results.inspect
 
