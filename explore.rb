@@ -4,7 +4,9 @@ NEW_LINE_REGEXP = /\n/
 
 class Uga_Uga
 
-  NOTHING = ''.freeze
+  NOTHING   = ''.freeze
+  REX       = /(\ {1,})|\(([^\)]+)\)|(.)/
+  REX_CACHE = {}
 
   module String_Refines
     refine String do
@@ -15,8 +17,9 @@ class Uga_Uga
   end
 
 
-  attr_reader :stack, :line_num, :parent
+  attr_reader :stack, :line_num, :parent, :captures
   def initialize str_or_arr, *args
+    @captures = nil
     @parent = nil
     file_or_number = nil
 
@@ -64,11 +67,69 @@ class Uga_Uga
     run
   end # === def uga
 
+  def rex? str, *args
+    key     = [str,args].to_s
+    reg_exp = ( REX_CACHE[key] ||= reg_exp(str, *args) )
+    match = l!.match reg_exp
+    @captures = match ?
+                  match.captures :
+                  nil
+    !!match
+  end
+
+  def reg_exp str, *custom
+    i = -1
+    base = str.scan(REX).map { |arr|
+      case
+      when arr[0]
+        /\ */
+
+      when arr[1]
+        case arr[1].strip
+        when '...'
+          /\ *([^\)]+)\ */
+
+        when '_'
+          i += 1
+          fail ArgumentError, "NO value set for #{i.inspect} -> #{str.inspect}" unless custom[i]
+          '(' + custom[i].to_s + ')'
+
+        when 'word'
+          /\ *([^\ \)]+)\ */
+
+        when 'white*'
+          /([\ ]*)/
+
+        when 'white'
+          /([\ ]+)/
+
+        when 'num'
+          /\ *([0-9\.\_\-]+)\ */
+
+        else
+          fail ArgumentError, "Unknown value for Regexp: #{arr[1].inspect} in #{str.inspect}"
+        end
+
+      when arr[2]
+        Regexp.escape arr[2]
+
+      else
+        fail ArgumentError, "#{str.inspect} -> #{REG_EXP.inspect}"
+      end
+    }
+    /\A#{base.join}\Z/
+  end
+
   def l!
     @lines.first
   end
 
   private # ===============================================
+
+  def bracket l, close
+    index = l.index(/[^\ ]/)
+    "#{" " * index}#{close}"
+  end
 
   def skip
     throw :skip
@@ -229,8 +290,8 @@ p
     visit my galaxy 3
   /a
   ----------------------------
-  I am a paragraph that goes +!
-  on and                     +!
+  I am a paragraph that goes
+  on and
   on.
 /p
 EOF
@@ -243,45 +304,45 @@ uga = Uga_Uga.new(str) do
   skip if white?
 
   case
-  when l![/\A(\ *)([^\{]+)\ *\{\ *\Z/]        # === multi-line css
-    indent = $1
-    close = 
+  when rex?("(white*)(...) { ")                    # === multi-line css
+    close = captures.first
     shift
     final = {
       :type      => :css,
-      :selectors => $2,
-      :raw       => grab_until(/\A#{indent}\}\ *\Z/)
+      :selectors => captures.last,
+      :raw       => grab_until(/\A#{close}\}\ *\Z/)
     }
 
-  when l![/\A\ *(.+)\{\ *(.+)\ *\}\ *\Z/]     # === css one-liner
-    selectors = $1
-    content   = $2
+  when rex?(" (...) { (...) } ")              # === css one-liner
+    selectors , content = captures
     shift
     final = {
       :type      => :css,
       :selectors => selectors,
-      :raw       => [$2],
+      :raw       => [content],
       :one_liner => true
     }
 
-  when l![/\A\ *String\ *([^\ ]+)\ *\Z/]        # === Multi-line String
-    close = $1
+  when rex?(" String (word) ")                   # === Multi-line String
+    close = captures.first
     shift
     final = {
       :type   => String,
       :output => grab_until(/\A\ *#{Regexp.escape close}\ *\Z/).join("\n")
     }
 
-  when l![/\A\ *color\ *([a-zA-Z0-9\-\_\#]+)\ *\Z/]
-    val = $1
+  when rex?(" color (word) ")
+    #  l![/\A\ *color\ *([a-zA-Z0-9\-\_\#]+)\ *\Z/]
+    val = captures.first
     final = {
       :type  => :css_property,
       :name  => :color,
       :output=> val
     }
 
-  when l![/\A\ *id\ *([a-zA-Z0-9\-\_\#]+)\ *\Z/]
-    val = $1
+  when rex?(" id (word) ")
+    #  l![/\A\ *id\ *([a-zA-Z0-9\-\_\#]+)\ *\Z/]
+    val = captures.first
     final = {
       :type  => :id!,
       :output=> val
@@ -295,13 +356,15 @@ uga = Uga_Uga.new(str) do
       tag = tag.to_sym
       case tag
       when :p, :a
-        index = l!.index(/[^\ ]/)
-        {:type=>:html, :tag=>tag, :selector => shift, :raw=>grab_until("#{" " * index}/#{tag}")}
+        line    = shift
+        bracket = bracket(line, "/#{tag}")
+        final = {:type=>:html, :tag=>tag, :selector => line, :raw=>grab_until(bracket)}
+        final
       else
         if stack.empty?
           {:type=>String, :raw=>grab_all}
-        elsif l![/\A(\ *\-{4,})\ *\Z/]     # Start of multi-line string --------------------
-          eos = $1
+        elsif rex?(" (_) ", /\-{4,}/)     # Start of multi-line string --------------------
+          eos = l!.rstrip
           shift
           {:type=>String, :raw=>grab_all_or_until(/\A#{eos}\ *|Z/)}
         else
