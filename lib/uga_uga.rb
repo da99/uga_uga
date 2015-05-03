@@ -1,12 +1,8 @@
 
 class Uga_Uga
 
-  NEW_LINE_REGEXP = /\n/
-  NOTHING         = ''.freeze
-  REX             = /(\ {1,})|\(([^\)]+)\)|(.)/
-  REX_CACHE       = {}
-  ZERO_OR_MORE_SPACES = /\ */
-  ONE_OR_MORE_SPACES  = /\ +/
+  NEW_LINE_REGEXP     = /\n/
+  NOTHING             = ''.freeze
 
   module String_Refines
     refine String do
@@ -39,66 +35,7 @@ class Uga_Uga
         arg
 
       end
-    end
-
-    def reg_exp str, *custom
-      i = -1
-      base = str.scan(REX).map { |arr|
-        case
-        when arr[0]
-          ONE_OR_MORE_SPACES
-
-        when arr[1]
-          key = arr[1].strip
-
-          case key
-          when '...'
-            /\ *([^\)]+?)\ */
-
-          when '_'
-            i += 1
-            fail ArgumentError, "NO value set for #{i.inspect} -> #{str.inspect}" unless custom[i]
-            '(' + custom[i].to_s + ')'
-
-          when 'word'
-            /\ *([^\ \)]+)\ */
-
-          when 'white*'
-            /([\ ]*)/
-
-          when 'white'
-            /([\ ]+)/
-
-          when 'num'
-            /\ *([0-9\.\_\-]+)\ */
-
-          when /\A![^\!]+/
-            /\ *([^#{Regexp.escape key.sub('!', '')}]+)\ */
-
-          else
-            fail ArgumentError, "Unknown value for Regexp: #{arr[1].inspect} in #{str.inspect}"
-          end # === case key
-
-        when arr[2]
-          Regexp.escape arr[2]
-
-        else
-          fail ArgumentError, "#{str.inspect} -> #{REG_EXP.inspect}"
-        end # === case
-      }
-
-      if base.first == ONE_OR_MORE_SPACES
-        base.shift
-        base.unshift ZERO_OR_MORE_SPACES
-      end
-
-      if base.last == ONE_OR_MORE_SPACES
-        base.pop
-        base.push ZERO_OR_MORE_SPACES
-      end
-
-      /\A#{base.join}\Z/
-    end
+    end # === def clean
 
   end # === class self ===
 
@@ -155,21 +92,20 @@ class Uga_Uga
     run
   end # === def uga
 
+  def l!
+    @lines.first
+  end
+
+  private # ===============================================
+
   def rex? str, *args
-    key     = [str,args].to_s
-    reg_exp = ( REX_CACHE[key] ||= Uga_Uga.reg_exp(str, *args) )
+    reg_exp = Rex_Dots.reg_exp(str, *args)
     match = l!.match reg_exp
     @captures = match ?
                   match.captures :
                   nil
     !!match
   end
-
-  def l!
-    @lines.first
-  end
-
-  private # ===============================================
 
   def bracket l, close
     index = l.index(/[^\ ]/)
