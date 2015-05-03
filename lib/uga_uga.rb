@@ -1,3 +1,4 @@
+require "rex_dots"
 
 class Uga_Uga
 
@@ -99,7 +100,7 @@ class Uga_Uga
   private # ===============================================
 
   def rex? str, *args
-    reg_exp = Rex_Dots.reg_exp(str, *args)
+    reg_exp = Rex_Dots.exp(str, *args)
     match = l!.match reg_exp
     @captures = match ?
                   match.captures :
